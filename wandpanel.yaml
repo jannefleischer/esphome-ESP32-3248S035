@@ -71,7 +71,7 @@ font:
   - file: "gfonts://Roboto"
     id: font_small
     size: 15
-    glyphs: "² !%+,-./0123456789:<>°ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß"
+    glyphs: "()² !%+,-./0123456789:<>°ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß"
   - file: "gfonts://Roboto"
     id: font_mid
     size: 22
@@ -86,11 +86,85 @@ font:
       - "\U000F19A1"
       - "\U000F058C"
 
+# 29 abgeschlossene Tage, dauerhaft im Flash. Heute kommt live aus dem Sensor.
+globals:
+  - id: solar_days
+    type: std::array<float, 29>
+    restore_value: true
+    initial_value: "std::array<float, 29>{}"
+
 time:
   - platform: homeassistant
     id: ha_time
+    on_time:
+      # Heutigen Balken stündlich aktualisieren.
+      - seconds: 0
+        minutes: 0
+        then:
+          - script.execute: solar_draw
+      # Kurz vor dem Tageswechsel, solange der Tageszähler noch nicht zurückgesetzt ist.
+      - seconds: 0
+        minutes: 59
+        hours: 23
+        then:
+          - lambda: |-
+              auto &days = id(solar_days);
+              std::rotate(days.begin(), days.begin() + 1, days.end());
+              float today = id(solar_today).state;
+              days[28] = std::isnan(today) ? 0.0f : today;
+          - script.execute: solar_draw
 
 script:
+  # Die Balken werden aus Rechtecken gebaut, die Höhe skaliert auf den größten Tag.
+  - id: solar_draw
+    then:
+      - lambda: |-
+              const auto &days = id(solar_days);
+              float today = id(solar_today).state;
+              if (std::isnan(today)) today = 0.0f;
+              float top = today, sum = today;
+              for (float v : days) { top = std::max(top, v); sum += v; }
+              // Skala auf volle 0,5 kWh aufgerundet, damit die Achse glatte Werte zeigt.
+              float axis = std::max(0.5f, std::ceil(top * 2.0f) / 2.0f);
+              auto height = [&](int i) -> int {
+                float v = i == 29 ? today : days[i];
+                if (v <= 0) return 1;
+                return std::max(1, (int) (v / axis * 212.0f));
+              };
+              lv_label_set_text(id(solar_axis_top), str_sprintf("%.1f", axis).c_str());
+              lv_label_set_text(id(solar_axis_mid), str_sprintf("%.2f", axis / 2.0f).c_str());
+              lv_obj_set_height(id(solar_bar_0), height(0));
+              lv_obj_set_height(id(solar_bar_1), height(1));
+              lv_obj_set_height(id(solar_bar_2), height(2));
+              lv_obj_set_height(id(solar_bar_3), height(3));
+              lv_obj_set_height(id(solar_bar_4), height(4));
+              lv_obj_set_height(id(solar_bar_5), height(5));
+              lv_obj_set_height(id(solar_bar_6), height(6));
+              lv_obj_set_height(id(solar_bar_7), height(7));
+              lv_obj_set_height(id(solar_bar_8), height(8));
+              lv_obj_set_height(id(solar_bar_9), height(9));
+              lv_obj_set_height(id(solar_bar_10), height(10));
+              lv_obj_set_height(id(solar_bar_11), height(11));
+              lv_obj_set_height(id(solar_bar_12), height(12));
+              lv_obj_set_height(id(solar_bar_13), height(13));
+              lv_obj_set_height(id(solar_bar_14), height(14));
+              lv_obj_set_height(id(solar_bar_15), height(15));
+              lv_obj_set_height(id(solar_bar_16), height(16));
+              lv_obj_set_height(id(solar_bar_17), height(17));
+              lv_obj_set_height(id(solar_bar_18), height(18));
+              lv_obj_set_height(id(solar_bar_19), height(19));
+              lv_obj_set_height(id(solar_bar_20), height(20));
+              lv_obj_set_height(id(solar_bar_21), height(21));
+              lv_obj_set_height(id(solar_bar_22), height(22));
+              lv_obj_set_height(id(solar_bar_23), height(23));
+              lv_obj_set_height(id(solar_bar_24), height(24));
+              lv_obj_set_height(id(solar_bar_25), height(25));
+              lv_obj_set_height(id(solar_bar_26), height(26));
+              lv_obj_set_height(id(solar_bar_27), height(27));
+              lv_obj_set_height(id(solar_bar_28), height(28));
+              lv_obj_set_height(id(solar_bar_29), height(29));
+              lv_label_set_text(id(solar_info_label), str_sprintf("Summe %.1f kWh, max. %.1f kWh", sum, top).c_str());
+
   # Fahrten starten nur aus dem Ruhezustand.
   - id: vac_start
     parameters:
@@ -172,6 +246,20 @@ script:
             return str_sprintf("Letzte Fahrt: %s, %s, %s, %.0f min, %s m²", when.c_str(), rooms.c_str(), kind.c_str(), minutes, id(vac_last_area).state.c_str());
 
 sensor:
+  - platform: homeassistant
+    id: solar_today
+    entity_id: sensor.balkonkraftwerk_heutige_erzeugung
+    # Nur der erste Wert nach dem Start zeichnet sofort, danach läuft es stündlich.
+    on_value:
+      - if:
+          condition:
+            lambda: |-
+              static bool drawn = false;
+              if (drawn || std::isnan(x)) return false;
+              drawn = true;
+              return true;
+          then:
+            - script.execute: solar_draw
   - platform: homeassistant
     id: vac_battery
     entity_id: sensor.erkerzimmer_s20_vacuum_0bce_batterie
@@ -346,9 +434,20 @@ lvgl:
             y: 10
             text: "Keine Verbindung"
         - button:
-            x: 200
+            x: 150
             y: 4
-            width: 130
+            width: 100
+            height: 40
+            on_click:
+              - lvgl.page.show: solar_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Solar >"
+        - button:
+            x: 258
+            y: 4
+            width: 100
             height: 40
             on_click:
               - lvgl.page.show: vacuum_page
@@ -357,9 +456,9 @@ lvgl:
                   align: CENTER
                   text: "Putzen >"
         - button:
-            x: 340
+            x: 366
             y: 4
-            width: 130
+            width: 106
             height: 40
             on_click:
               - lvgl.page.show: heating_page
@@ -515,3 +614,431 @@ lvgl:
         - !include { file: ui/vacuum_room_row.yaml, vars: { room: f, room_id: ROOM_006, name: "F", y: 230 } }
         - !include { file: ui/vacuum_room_row.yaml, vars: { room: g, room_id: ROOM_007, name: "G", y: 260 } }
         - !include { file: ui/vacuum_room_row.yaml, vars: { room: malzimmer, room_id: ROOM_001, name: "Malzimmer", y: 290 } }
+
+    - id: solar_page
+      bg_color: 0x12161C
+      pad_all: 0
+      scrollable: false
+      widgets:
+        - button:
+            x: 10
+            y: 4
+            width: 96
+            height: 32
+            on_click:
+              - lvgl.page.show: overview_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_small
+                  text: "< Übersicht"
+        - label: { x: 118, y: 11, text_font: font_small, text: "Erzeugung letzte 30 Tage (kWh)" }
+        - label: { id: solar_info_label, x: 8, y: 44, text_font: font_small, text: "Noch keine Daten" }
+        - obj:
+            x: 0
+            y: 66
+            width: 480
+            height: 226
+            pad_all: 0
+            border_width: 0
+            bg_opa: TRANSP
+            scrollable: false
+            widgets:
+              - obj:
+                  x: 36
+                  y: 14
+                  width: 440
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x3A4654
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  x: 36
+                  y: 120
+                  width: 440
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x3A4654
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  x: 36
+                  y: 225
+                  width: 440
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x3A4654
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_0
+                  x: 38
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_1
+                  x: 52
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_2
+                  x: 66
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_3
+                  x: 80
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_4
+                  x: 94
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_5
+                  x: 108
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_6
+                  x: 122
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_7
+                  x: 136
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_8
+                  x: 150
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_9
+                  x: 164
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_10
+                  x: 178
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_11
+                  x: 192
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_12
+                  x: 206
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_13
+                  x: 220
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_14
+                  x: 234
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_15
+                  x: 248
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_16
+                  x: 262
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_17
+                  x: 276
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_18
+                  x: 290
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_19
+                  x: 304
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_20
+                  x: 318
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_21
+                  x: 332
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_22
+                  x: 346
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_23
+                  x: 360
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_24
+                  x: 374
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_25
+                  x: 388
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_26
+                  x: 402
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_27
+                  x: 416
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_28
+                  x: 430
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x4A90D9
+                  clickable: false
+                  scrollable: false
+              - obj:
+                  id: solar_bar_29
+                  x: 444
+                  align: BOTTOM_LEFT
+                  width: 10
+                  height: 1
+                  radius: 0
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0xF5B301
+                  clickable: false
+                  scrollable: false
+        - label: { id: solar_axis_top, x: 4, y: 72, text_font: font_small, text: "--" }
+        - label: { id: solar_axis_mid, x: 2, y: 178, text_font: font_small, text: "--" }
+        - label: { x: 18, y: 283, text_font: font_small, text: "0" }
+        - label: { x: 38, y: 298, text_font: font_small, text: "vor 29 Tagen" }
+        - label: { align: TOP_RIGHT, x: -8, y: 298, text_font: font_small, text: "heute" }

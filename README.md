@@ -128,6 +128,8 @@ After 30 seconds without touch the backlight turns off. The first touch only wak
 - Single-room runs use standard suction. Whole-home runs permanently change the mode set in the integration.
 - Status and battery come from Bluetooth; the cloud is the fallback for status. Without history data the page shows `Verlauf gerade nicht verfügbar` or `--`. `--` under `Gewischt` can also mean a room has never been mopped.
 
+**Solar:** Bar chart of balcony solar production over the last 30 days, with a y-axis in kWh that scales to the largest day. Today's bar (yellow) is redrawn every full hour. At 23:59 the day is stored in flash on the panel, so the history builds up from the first flash of this page; older days are not backfilled from Home Assistant.
+
 ### Making changes
 
 - **Adding a room:** in `wandpanel.yaml`, add one `!include` line under `packages:` (sensors) and one in the page (row). `room` must be unique. Heating (6 rows) and cleaning (8 rows) are full.

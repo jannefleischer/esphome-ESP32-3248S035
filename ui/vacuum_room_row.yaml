@@ -1,0 +1,61 @@
+# Eine Zeile der Putzen-Seite. Vars: room, room_id, name, y
+obj:
+  x: 0
+  y: ${y}
+  width: 480
+  height: 30
+  pad_all: 0
+  bg_opa: TRANSP
+  border_width: 0
+  scrollable: false
+  widgets:
+    - label:
+        id: vac_${room}_name_label
+        x: 8
+        align: LEFT_MID
+        text_font: font_small
+        text: "${name}"
+    - label:
+        id: vac_${room}_vacuumed_label
+        x: 100
+        align: LEFT_MID
+        text_font: font_small
+        text: "--"
+    - label:
+        id: vac_${room}_mopped_label
+        x: 230
+        align: LEFT_MID
+        text_font: font_small
+        text: "--"
+    - button:
+        x: 380
+        align: LEFT_MID
+        width: 44
+        height: 26
+        pad_all: 0
+        on_click:
+          - script.execute:
+              id: vac_start_room
+              room_id: "${room_id}"
+              mode: "sweep"
+        widgets:
+          - label:
+              align: CENTER
+              text_font: font_icons
+              text: "\U000F19A1"
+    - button:
+        x: 430
+        align: LEFT_MID
+        width: 44
+        height: 26
+        pad_all: 0
+        on_click:
+          - script.execute:
+              id: vac_start_room
+              room_id: "${room_id}"
+              mode: "mop"
+        widgets:
+          - label:
+              align: CENTER
+              text_font: font_icons
+              text: "\U000F058C"

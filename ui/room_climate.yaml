@@ -1,0 +1,16 @@
+# Raumklima aus dem Hygrometer eines Raums. Vars: room, temp_entity, hum_entity
+sensor:
+  - platform: homeassistant
+    id: ${room}_raum_t
+    entity_id: ${temp_entity}
+    on_value:
+      - lvgl.label.update:
+          id: ${room}_raum_t_label
+          text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.1f°", x);'
+  - platform: homeassistant
+    id: ${room}_raum_h
+    entity_id: ${hum_entity}
+    on_value:
+      - lvgl.label.update:
+          id: ${room}_raum_h_label
+          text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.0f%%", x);'

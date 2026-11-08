@@ -1,0 +1,517 @@
+# Wandpanel für Home Assistant auf dem ESP32-3248S035.
+#
+#   esphome config  wandpanel.yaml    # prüfen
+#   esphome compile wandpanel.yaml    # bauen
+#   esphome upload  wandpanel.yaml --device COM3
+#
+# In HA muss für das Gerät "Allow the device to perform Home Assistant
+# actions" aktiv sein, sonst wirken Schalter und Solltemperatur nicht.
+
+esphome:
+  name: wandpanel
+  friendly_name: Wandpanel
+  includes:
+    - ui/format_time.h
+
+packages:
+  hardware: !include hardware/esp32-3248s035.yaml
+  arbeitszimmer: !include { file: ui/room_sensors.yaml, vars: { room: arbeitszimmer, entity: climate.thermostate_arbeitszimmer } }
+  schlafzimmer: !include { file: ui/room_sensors.yaml, vars: { room: schlafzimmer, entity: climate.thermostate_schlafzimmer } }
+  kueche: !include { file: ui/room_sensors.yaml, vars: { room: kueche, entity: climate.tze200_h4cgnbzg_ts0601 } }
+  laurie: !include { file: ui/room_sensors.yaml, vars: { room: laurie, entity: climate.thermostat_lauries_zimmer } }
+  johanna: !include { file: ui/room_sensors.yaml, vars: { room: johanna, entity: climate.thermostat_johannas_zimmer } }
+  erker: !include { file: ui/room_sensors.yaml, vars: { room: erker, entity: climate.thermostat_erkerzimmer } }
+  arbeitszimmer_klima: !include { file: ui/room_climate.yaml, vars: { room: arbeitszimmer, temp_entity: sensor.hygrometer_arbeitszimmer_temperatur, hum_entity: sensor.hygrometer_arbeitszimmer_luftfeuchtigkeit } }
+  schlafzimmer_klima: !include { file: ui/room_climate.yaml, vars: { room: schlafzimmer, temp_entity: sensor.schlafzimmer_temperatur, hum_entity: sensor.schlafzimmer_luftfeuchtigkeit } }
+  laurie_klima: !include { file: ui/room_climate.yaml, vars: { room: laurie, temp_entity: sensor.hygrometer_lauries_zimmer_temperatur, hum_entity: sensor.hygrometer_lauries_zimmer_luftfeuchtigkeit } }
+  johanna_klima: !include { file: ui/room_climate.yaml, vars: { room: johanna, temp_entity: sensor.hygrometer_johanna_temperatur, hum_entity: sensor.hygrometer_johanna_luftfeuchtigkeit } }
+  erker_klima: !include { file: ui/room_climate.yaml, vars: { room: erker, temp_entity: sensor.outdoor_hydrometer_erkerzimmer_temperatur, hum_entity: sensor.outdoor_hydrometer_erkerzimmer_luftfeuchtigkeit } }
+  vac_a: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: a, entity: switchbot_vacuum_room_008 } }
+  vac_b: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: b, entity: switchbot_vacuum_room_002 } }
+  vac_c: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: c, entity: switchbot_vacuum_room_003 } }
+  vac_d: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: d, entity: switchbot_vacuum_room_004 } }
+  vac_e: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: e, entity: switchbot_vacuum_room_005 } }
+  vac_f: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: f, entity: switchbot_vacuum_room_006 } }
+  vac_g: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: g, entity: switchbot_vacuum_room_007 } }
+  vac_malzimmer: !include { file: ui/vacuum_room_sensors.yaml, vars: { room: malzimmer, entity: switchbot_vacuum_room_001 } }
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_key
+  on_client_connected:
+    - lvgl.label.update:
+        id: status_label
+        text: "HA verbunden"
+  on_client_disconnected:
+    - lvgl.label.update:
+        id: status_label
+        text: "Keine Verbindung"
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Eingebaute LVGL-Fonts haben keine Umlaute. Nur benötigte Zeichen = wenig Flash.
+font:
+  - file: "gfonts://Roboto"
+    id: font_normal
+    size: 18
+    glyphs: " !%+,-./0123456789:<>°ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß"
+  - file: "gfonts://Roboto"
+    id: font_big
+    size: 28
+    glyphs: " -.0123456789:°ACWasu"
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 15
+    glyphs: "² !%+,-./0123456789:<>°ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß"
+  - file: "gfonts://Roboto"
+    id: font_mid
+    size: 22
+    glyphs: " -.0123456789°"
+  # Material Design Icons: mdi-vacuum, mdi-water
+  - file:
+      type: web
+      url: https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf
+    id: font_icons
+    size: 20
+    glyphs:
+      - "\U000F19A1"
+      - "\U000F058C"
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+script:
+  # Fahrten starten nur aus dem Ruhezustand.
+  - id: vac_start
+    parameters:
+      mode: string
+    then:
+      - if:
+          condition:
+            lambda: |-
+              std::string state = id(vac_ble_state).state;
+              if (state.empty() || state == "unknown" || state == "unavailable")
+                state = id(vac_cloud_state).state;
+              return state == "docked" || state == "idle";
+          then:
+            - homeassistant.action:
+                action: switchbot_vacuum.set_clean_mode
+                data:
+                  entity_id: vacuum.erkerzimmer_switchbot_vacuum
+                  mode: !lambda return mode;
+            - delay: 3s
+            - homeassistant.action:
+                action: vacuum.start
+                data:
+                  entity_id: vacuum.erkerzimmer_switchbot_vacuum
+
+  - id: vac_start_room
+    parameters:
+      room_id: string
+      mode: string
+    then:
+      - if:
+          condition:
+            lambda: |-
+              std::string state = id(vac_ble_state).state;
+              if (state.empty() || state == "unknown" || state == "unavailable")
+                state = id(vac_cloud_state).state;
+              return state == "docked" || state == "idle";
+          then:
+            - homeassistant.action:
+                action: switchbot_vacuum.clean_rooms
+                data:
+                  entity_id: vacuum.erkerzimmer_switchbot_vacuum
+                  mode: !lambda return mode;
+                  fan_level: "2"
+                data_template:
+                  rooms: !lambda |-
+                    return "{{ ['" + room_id + "'] }}";
+
+  # Bluetooth ist die Hauptquelle, die Cloud nur Rückfall. Fällt beides aus: "--".
+  - id: vac_status_update
+    then:
+      - lvgl.label.update:
+          id: vac_status_label
+          text: !lambda |-
+            std::string state = id(vac_ble_state).state;
+            if (state.empty() || state == "unknown" || state == "unavailable")
+              state = id(vac_cloud_state).state;
+            static const std::map<std::string, std::string> names = {
+              {"docked", "In der Station"}, {"cleaning", "Putzt"}, {"returning", "Fährt zurück"},
+              {"paused", "Pausiert"}, {"idle", "Bereit"}, {"error", "Fehler"}};
+            auto it = names.find(state);
+            std::string text = it != names.end() ? it->second : std::string("Status: --");
+            float battery = id(vac_battery).state;
+            if (!std::isnan(battery)) text += str_sprintf(", Akku %.0f%%", battery);
+            return text;
+  - id: vac_last_update
+    then:
+      - lvgl.label.update:
+          id: vac_last_label
+          text: !lambda |-
+            std::string when = format_clean_time(id(vac_last_clean).state, id(ha_time).now());
+            if (when == "--") return std::string("Verlauf gerade nicht verfügbar");
+            std::string rooms;
+            for (char c : id(vac_last_rooms).state)
+              if (c != '[' && c != ']' && c != '\'' && c != '"') rooms += c;
+            bool vacuumed = id(vac_last_vacuumed).state == "True" || id(vac_last_vacuumed).state == "true";
+            bool mopped = id(vac_last_mopped).state == "True" || id(vac_last_mopped).state == "true";
+            std::string kind = vacuumed && mopped ? "gesaugt+gewischt" : (mopped ? "gewischt" : "gesaugt");
+            float minutes = atof(id(vac_last_minutes).state.c_str());
+            return str_sprintf("Letzte Fahrt: %s, %s, %s, %.0f min, %s m²", when.c_str(), rooms.c_str(), kind.c_str(), minutes, id(vac_last_area).state.c_str());
+
+sensor:
+  - platform: homeassistant
+    id: vac_battery
+    entity_id: sensor.erkerzimmer_s20_vacuum_0bce_batterie
+    on_value:
+      - script.execute: vac_status_update
+  - platform: homeassistant
+    id: ha_hygrometer_no_name_outdor_temperatur
+    entity_id: sensor.hygrometer_no_name_outdor_temperatur
+    on_value:
+      - lvgl.label.update:
+          id: outdoor_label
+          text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.1f°C", x);'
+  - platform: homeassistant
+    id: ha_gesamtleistung
+    entity_id: sensor.gesamtleistung
+    on_value:
+      - lvgl.label.update:
+          id: power_label
+          text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.0f W", x);'
+  - platform: homeassistant
+    id: ha_balkonkraftwerk_gesamtleistung
+    entity_id: sensor.balkonkraftwerk_gesamtleistung
+    on_value:
+      - lvgl.label.update:
+          id: solar_label
+          text: !lambda 'return std::isnan(x) ? std::string("Balkon: --") : str_sprintf("Balkon: %.0f W", x);'
+  - platform: homeassistant
+    id: ha_power_production_now
+    entity_id: sensor.power_production_now
+    on_value:
+      - lvgl.label.update:
+          id: forecast_label
+          text: !lambda 'return std::isnan(x) ? std::string("Prognose: --") : str_sprintf("Prognose: %.0f W", x);'
+
+text_sensor:
+  - platform: homeassistant
+    id: vac_ble_state
+    entity_id: vacuum.erkerzimmer_s20_vacuum_0bce
+    on_value:
+      - script.execute: vac_status_update
+  - platform: homeassistant
+    id: vac_cloud_state
+    entity_id: vacuum.erkerzimmer_switchbot_vacuum
+    on_value:
+      - script.execute: vac_status_update
+  - platform: homeassistant
+    id: vac_last_clean
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: vac_last_rooms
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    attribute: rooms
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: vac_last_vacuumed
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    attribute: vacuumed
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: vac_last_mopped
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    attribute: mopped
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: vac_last_minutes
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    attribute: clean_minutes
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: vac_last_area
+    entity_id: sensor.erkerzimmer_switchbot_vacuum_last_clean
+    attribute: area
+    on_value:
+      - script.execute: vac_last_update
+  - platform: homeassistant
+    id: ha_forecast_home
+    entity_id: weather.forecast_home
+    on_value:
+      - lvgl.label.update:
+          id: weather_label
+          text: !lambda |-
+            static const std::map<std::string, std::string> names = {
+              {"sunny", "Sonnig"}, {"clear-night", "Klar"}, {"partlycloudy", "Teils bewölkt"},
+              {"cloudy", "Bewölkt"}, {"fog", "Nebel"}, {"rainy", "Regen"}, {"pouring", "Starkregen"},
+              {"snowy", "Schnee"}, {"snowy-rainy", "Schneeregen"}, {"hail", "Hagel"},
+              {"lightning", "Gewitter"}, {"lightning-rainy", "Gewitter"}, {"windy", "Windig"},
+              {"windy-variant", "Windig"}, {"exceptional", "Unwetter"}};
+            auto it = names.find(x);
+            return it != names.end() ? it->second : std::string("--");
+  # Text im Format H:MM:SS. Noch nicht während eines Waschgangs geprüft.
+  - platform: homeassistant
+    id: ha_waschmaschine_remaining_time
+    entity_id: sensor.waschmaschine_remaining_time
+    on_value:
+      - lvgl.label.update:
+          id: washer_label
+          text: !lambda |-
+            if (x == "0:00:00" || x == "unavailable" || x == "unknown") return std::string("Aus");
+            return x;
+
+binary_sensor:
+  - platform: homeassistant
+    id: ha_smart_plug_stecker_2
+    entity_id: switch.smart_plug_stecker_2
+    trigger_on_initial_state: true
+    on_state:
+      - lvgl.widget.update:
+          id: flur_button
+          state:
+            checked: !lambda return x;
+      - lvgl.label.update:
+          id: flur_label
+          text: !lambda 'return std::string(x ? "Flurlampe: An" : "Flurlampe: Aus");'
+  - platform: homeassistant
+    id: ha_smart_plug_kuche_heisswasser
+    entity_id: switch.smart_plug_kuche_heisswasser
+    trigger_on_initial_state: true
+    on_state:
+      - lvgl.widget.update:
+          id: heisswasser_button
+          state:
+            checked: !lambda return x;
+      - lvgl.label.update:
+          id: heisswasser_label
+          text: !lambda 'return std::string(x ? "Heißwasser Küche: An" : "Heißwasser Küche: Aus");'
+
+lvgl:
+  displays:
+    - main_display
+  touchscreens:
+    - main_touch
+  # Ohne PSRAM: 25 % = 76.800 Bytes. Bei Allokationsfehler auf 12% senken.
+  buffer_size: 25%
+  # Schlafmodus: nach 30 s ohne Berührung Licht aus und LVGL pausieren.
+  # resume_on_input: false, damit der Weck-Tipp keinen Knopf auslöst.
+  resume_on_input: false
+  on_idle:
+    timeout: 30s
+    then:
+      - light.turn_off: backlight
+      - lvgl.pause:
+  default_font: font_normal
+  bg_color: 0x12161C
+  text_color: 0xFFFFFF
+  theme:
+    obj:
+      text_color: 0xFFFFFF
+    label:
+      text_color: 0xFFFFFF
+    button:
+      bg_color: 0x2F3B4A
+      text_color: 0xFFFFFF
+      checked:
+        bg_color: 0xE08A1E
+      pressed:
+        bg_color: 0x4A90D9
+  pages:
+    - id: overview_page
+      bg_color: 0x12161C
+      pad_all: 0
+      scrollable: false
+      widgets:
+        - label:
+            id: status_label
+            x: 10
+            y: 10
+            text: "Keine Verbindung"
+        - button:
+            x: 200
+            y: 4
+            width: 130
+            height: 40
+            on_click:
+              - lvgl.page.show: vacuum_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Putzen >"
+        - button:
+            x: 340
+            y: 4
+            width: 130
+            height: 40
+            on_click:
+              - lvgl.page.show: heating_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Heizung >"
+
+        - label: { x: 10, y: 60, text: "Außen" }
+        - label: { id: outdoor_label, x: 10, y: 84, text_font: font_big, text: "--" }
+        - label: { id: weather_label, x: 10, y: 122, text: "--" }
+
+        - label: { x: 170, y: 60, text: "Strom" }
+        - label: { id: power_label, x: 170, y: 84, text_font: font_big, text: "--" }
+        - label: { id: solar_label, x: 170, y: 122, text: "Balkon: --" }
+        - label: { id: forecast_label, x: 170, y: 146, text: "Prognose: --" }
+
+        - label: { x: 345, y: 60, text: "Waschmaschine" }
+        - label: { id: washer_label, x: 345, y: 84, text_font: font_big, text: "--" }
+
+        - button:
+            id: flur_button
+            x: 10
+            y: 200
+            width: 225
+            height: 104
+            checkable: true
+            on_click:
+              - homeassistant.action:
+                  action: switch.toggle
+                  data:
+                    entity_id: switch.smart_plug_stecker_2
+            widgets:
+              - label:
+                  id: flur_label
+                  align: CENTER
+                  text: "Flurlampe: --"
+        - button:
+            id: heisswasser_button
+            x: 245
+            y: 200
+            width: 225
+            height: 104
+            checkable: true
+            on_click:
+              - homeassistant.action:
+                  action: switch.toggle
+                  data:
+                    entity_id: switch.smart_plug_kuche_heisswasser
+            widgets:
+              - label:
+                  id: heisswasser_label
+                  align: CENTER
+                  text: "Heißwasser Küche: --"
+
+    - id: heating_page
+      bg_color: 0x12161C
+      pad_all: 0
+      scrollable: false
+      widgets:
+        - button:
+            x: 10
+            y: 4
+            width: 96
+            height: 36
+            on_click:
+              - lvgl.page.show: overview_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_small
+                  text: "< Übersicht"
+        - label: { x: 124, y: 14, text_font: font_small, text: "Therm." }
+        - label: { x: 180, y: 14, text_font: font_small, text: "Raum" }
+        - label: { x: 238, y: 14, text_font: font_small, text: "rF" }
+        - label: { x: 296, y: 14, text_font: font_small, text: "Soll" }
+        - !include { file: ui/room_row.yaml, vars: { room: arbeitszimmer, entity: climate.thermostate_arbeitszimmer, name: "Arbeitszimmer", y: 44 } }
+        - !include { file: ui/room_row.yaml, vars: { room: schlafzimmer, entity: climate.thermostate_schlafzimmer, name: "Schlafzimmer", y: 90 } }
+        - !include { file: ui/room_row.yaml, vars: { room: kueche, entity: climate.tze200_h4cgnbzg_ts0601, name: "Küche", y: 136 } }
+        - !include { file: ui/room_row.yaml, vars: { room: laurie, entity: climate.thermostat_lauries_zimmer, name: "Laurie", y: 182 } }
+        - !include { file: ui/room_row.yaml, vars: { room: johanna, entity: climate.thermostat_johannas_zimmer, name: "Johanna", y: 228 } }
+        - !include { file: ui/room_row.yaml, vars: { room: erker, entity: climate.thermostat_erkerzimmer, name: "Erkerzimmer", y: 274 } }
+
+    - id: vacuum_page
+      bg_color: 0x12161C
+      pad_all: 0
+      scrollable: false
+      widgets:
+        - button:
+            x: 10
+            y: 4
+            width: 96
+            height: 32
+            on_click:
+              - lvgl.page.show: overview_page
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: font_small
+                  text: "< Übersicht"
+        - button:
+            x: 296
+            y: 4
+            width: 88
+            height: 32
+            pad_all: 0
+            on_click:
+              - script.execute:
+                  id: vac_start
+                  mode: "sweep"
+            widgets:
+              - label:
+                  x: 5
+                  align: LEFT_MID
+                  text_font: font_icons
+                  text: "\U000F19A1"
+              - label:
+                  x: 27
+                  align: LEFT_MID
+                  text_font: font_small
+                  text: "Saugen"
+        - button:
+            x: 388
+            y: 4
+            width: 88
+            height: 32
+            pad_all: 0
+            on_click:
+              - script.execute:
+                  id: vac_start
+                  mode: "mop"
+            widgets:
+              - label:
+                  x: 5
+                  align: LEFT_MID
+                  text_font: font_icons
+                  text: "\U000F058C"
+              - label:
+                  x: 27
+                  align: LEFT_MID
+                  text_font: font_small
+                  text: "Wischen"
+        - label: { id: vac_status_label, x: 114, y: 11, text_font: font_small, text: "Status: --" }
+        - label: { id: vac_last_label, x: 8, y: 42, text_font: font_small, text: "Verlauf gerade nicht verfügbar" }
+        - label: { x: 8, y: 62, text_font: font_small, text: "Raum" }
+        - label: { x: 100, y: 62, text_font: font_small, text: "Gesaugt" }
+        - label: { x: 230, y: 62, text_font: font_small, text: "Gewischt" }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: a, room_id: ROOM_008, name: "A", y: 80 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: b, room_id: ROOM_002, name: "B", y: 110 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: c, room_id: ROOM_003, name: "C", y: 140 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: d, room_id: ROOM_004, name: "D", y: 170 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: e, room_id: ROOM_005, name: "E", y: 200 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: f, room_id: ROOM_006, name: "F", y: 230 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: g, room_id: ROOM_007, name: "G", y: 260 } }
+        - !include { file: ui/vacuum_room_row.yaml, vars: { room: malzimmer, room_id: ROOM_001, name: "Malzimmer", y: 290 } }

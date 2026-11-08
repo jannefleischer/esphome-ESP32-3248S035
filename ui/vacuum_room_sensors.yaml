@@ -1,0 +1,36 @@
+# Wann ein Raum zuletzt gesaugt und gewischt wurde. Vars: room, entity
+text_sensor:
+  # Name kommt live aus der App, die Entity-ID bleibt beim Umbenennen gleich.
+  - platform: homeassistant
+    id: vac_${room}_name
+    entity_id: sensor.${entity}
+    on_value:
+      - lvgl.label.update:
+          id: vac_${room}_name_label
+          text: !lambda 'return (x.empty() || x == "unknown" || x == "unavailable") ? std::string("--") : x;'
+  - platform: homeassistant
+    id: vac_${room}_vacuumed
+    entity_id: sensor.${entity}_vacuumed
+    on_value:
+      - script.execute: vac_${room}_update
+  - platform: homeassistant
+    id: vac_${room}_mopped
+    entity_id: sensor.${entity}_mopped
+    on_value:
+      - script.execute: vac_${room}_update
+
+script:
+  - id: vac_${room}_update
+    then:
+      - lvgl.label.update:
+          id: vac_${room}_vacuumed_label
+          text: !lambda 'return format_clean_time(id(vac_${room}_vacuumed).state, id(ha_time).now());'
+      - lvgl.label.update:
+          id: vac_${room}_mopped_label
+          text: !lambda 'return format_clean_time(id(vac_${room}_mopped).state, id(ha_time).now());'
+
+# Hält „heute“ und „gestern“ auch ohne neue Werte aktuell.
+interval:
+  - interval: 15min
+    then:
+      - script.execute: vac_${room}_update

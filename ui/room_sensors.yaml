@@ -1,0 +1,69 @@
+# Sensoren und Sollwert-Logik eines Raums. Vars: room, entity
+#
+# ${room}_pending: gepufferter Sollwert, NAN = nichts offen.
+# Tastendrücke zählen sofort auf dem Panel; gesendet wird 1 s nach dem letzten
+# Druck. Danach 5 s Haltezeit, weil Thermostate verzögert zurückmelden.
+
+globals:
+  - id: ${room}_pending
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+
+sensor:
+  - platform: homeassistant
+    id: ${room}_ist
+    entity_id: ${entity}
+    attribute: current_temperature
+    on_value:
+      - lvgl.label.update:
+          id: ${room}_ist_label
+          text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.1f°", x);'
+  - platform: homeassistant
+    id: ${room}_soll
+    entity_id: ${entity}
+    attribute: temperature
+    on_value:
+      - if:
+          condition:
+            lambda: return std::isnan(id(${room}_pending));
+          then:
+            - lvgl.label.update:
+                id: ${room}_soll_label
+                text: !lambda 'return std::isnan(x) ? std::string("--") : str_sprintf("%.1f°", x);'
+
+script:
+  - id: ${room}_adjust
+    parameters:
+      delta: float
+    then:
+      - lambda: |-
+          float base = std::isnan(id(${room}_pending)) ? id(${room}_soll).state : id(${room}_pending);
+          if (std::isnan(base)) return;
+          float target = std::round((base + delta) * 2.0f) / 2.0f;
+          id(${room}_pending) = std::max(5.0f, std::min(30.0f, target));
+      - if:
+          condition:
+            lambda: return !std::isnan(id(${room}_pending));
+          then:
+            - lvgl.label.update:
+                id: ${room}_soll_label
+                text: !lambda 'return str_sprintf("%.1f°", id(${room}_pending));'
+            - script.execute: ${room}_send
+
+  - id: ${room}_send
+    mode: restart
+    then:
+      - delay: 1s
+      - homeassistant.action:
+          action: climate.set_temperature
+          data:
+            entity_id: ${entity}
+            temperature: !lambda return id(${room}_pending);
+      - delay: 5s
+      - lambda: id(${room}_pending) = NAN;
+      - lvgl.label.update:
+          id: ${room}_soll_label
+          text: !lambda |-
+            float s = id(${room}_soll).state;
+            return std::isnan(s) ? std::string("--") : str_sprintf("%.1f°", s);

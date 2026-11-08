@@ -1,0 +1,74 @@
+# ESP32-3248S035 (kapazitiv): Display, Touch und Backlight.
+# Pins laut Schaltplan V1.1. Details und offene Punkte: ../CLAUDE.md
+
+esp32:
+  board: esp32dev
+  flash_size: 4MB
+
+spi:
+  - id: spi_tft
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
+    miso_pin: GPIO12
+
+display:
+  - platform: ili9xxx
+    id: main_display
+    model: ST7796
+    spi_id: spi_tft
+    dc_pin: GPIO2
+    cs_pin: GPIO15
+    dimensions:
+      width: 480
+      height: 320
+    data_rate: 80MHz
+    color_order: RGB
+    invert_colors: false
+    # Ohne PSRAM zeichnet nur LVGL, kein Vollbild-Puffer im Treiber.
+    update_interval: never
+    auto_clear_enabled: false
+    transform:
+      swap_xy: true
+      mirror_x: false
+      mirror_y: false
+
+i2c:
+  id: bus_touch
+  sda: GPIO33
+  scl: GPIO32
+  scan: true
+
+# INT (GPIO21) und RST (GPIO25) bewusst noch nicht gesetzt:
+# Erst Polling testen, siehe CLAUDE.md.
+touchscreen:
+  - platform: gt911
+    id: main_touch
+    display: main_display
+    i2c_id: bus_touch
+    update_interval: 50ms
+    transform:
+      swap_xy: true
+      mirror_x: false
+      mirror_y: true
+    # Schlafmodus: Die erste Berührung weckt nur auf, siehe lvgl.on_idle.
+    on_release:
+      - if:
+          condition: lvgl.is_paused
+          then:
+            - lvgl.resume:
+            - lvgl.widget.redraw:
+            - light.turn_on:
+                id: backlight
+                transition_length: 0s
+
+output:
+  - platform: ledc
+    id: backlight_pwm
+    pin: GPIO27
+
+light:
+  - platform: monochromatic
+    id: backlight
+    name: "Backlight"
+    output: backlight_pwm
+    restore_mode: ALWAYS_ON

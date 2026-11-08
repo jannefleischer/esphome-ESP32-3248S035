@@ -1,0 +1,7 @@
+secrets.yaml
+.esphome/
+backup_*.bin
+secrets/
+.env
+logs/
+.venv/

@@ -1,0 +1,67 @@
+# Eine Zeile der Heizungsseite. Vars: room, entity, name, y
+# Spalten: Name 8 | Therm. 124 | Raum 180 | Feuchte 238 | Soll 296 | - 372 | + 428
+obj:
+  x: 0
+  y: ${y}
+  width: 480
+  height: 44
+  pad_all: 0
+  bg_opa: TRANSP
+  border_width: 0
+  scrollable: false
+  widgets:
+    - label:
+        x: 8
+        align: LEFT_MID
+        text_font: font_small
+        text: "${name}"
+    - label:
+        id: ${room}_ist_label
+        x: 124
+        align: LEFT_MID
+        text_font: font_small
+        text: "--"
+    - label:
+        id: ${room}_raum_t_label
+        x: 180
+        align: LEFT_MID
+        text_font: font_small
+        text: "--"
+    - label:
+        id: ${room}_raum_h_label
+        x: 238
+        align: LEFT_MID
+        text_font: font_small
+        text: "--"
+    - label:
+        id: ${room}_soll_label
+        x: 296
+        align: LEFT_MID
+        text_font: font_mid
+        text: "--"
+    - button:
+        x: 372
+        align: LEFT_MID
+        width: 44
+        height: 34
+        on_click:
+          - script.execute:
+              id: ${room}_adjust
+              delta: -0.5
+        widgets:
+          - label:
+              align: CENTER
+              text: "-"
+    - button:
+        x: 428
+        align: LEFT_MID
+        width: 44
+        height: 34
+        on_click:
+          - script.execute:
+              id: ${room}_adjust
+              delta: 0.5
+        widgets:
+          - label:
+              align: CENTER
+              text: "+"

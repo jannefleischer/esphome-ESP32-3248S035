@@ -1,48 +1,45 @@
-# Wandpanel: ESPHome-Firmware
+# Wall panel: ESPHome firmware
 
-ESPHome-Projekt für ein ESP32-3248S035 (3,5", kapazitiver Touch) als Home-Assistant-Panel im Flur am Stromkasten, Querformat 480×320.
+ESPHome project that turns an ESP32-3248S035 (3.5", capacitive touch) into a Home Assistant wall panel, in landscape at 480×320. The text on the display is German.
 
-Hardware-Details, Pinbelegung und Recherche stehen in [`CLAUDE.md`](CLAUDE.md).
+Hardware details, pinout and background research are in [`CLAUDE.md`](CLAUDE.md).
 
-## Stand
+## Status
 
-| Punkt | Status |
+| Item | Status |
 |---|---|
-| Build | erfolgreich mit ESPHome 2026.10.2: Flash ca. 1,06 MB von 1,75 MB (58 %), RAM statisch ca. 57 KB |
-| Am Gerät (2026-11-08) | läuft: Bild, Touch, WLAN und Bedienung. Raumstart des Roboters getestet (Saugen) |
-| Backup Originalfirmware | `backup_4MB.bin` (4 MB, SHA256 `9EE1BE1C…3568A0`) |
-| WLAN | verbunden (2,4 GHz, WPA3) |
-| Home Assistant | ESPHome-Integration eingerichtet, Aktionen freigegeben |
-| Roboter-Integration | `switchbot_vacuum` aus dem Fork [`jannefleischer/switchbot-vacuum`](https://github.com/jannefleischer/switchbot-vacuum), Zweig `prod` |
-| Noch nicht geprüft | Waschmaschinen-Restzeit während eines Waschgangs; Knöpfe „Wischen“ und Ganzhaus-Start; Firmware-Update über WLAN |
-| Offen | Farben wirken am Display möglicherweise vertauscht (Rot/Blau), Prüfung am Gerät steht aus |
+| Build | Succeeds with ESPHome 2026.10.2: about 1.06 MB of 1.75 MB flash (58 %), about 57 KB static RAM |
+| On the device (2026-11-08) | Display, touch, Wi-Fi and controls work. Starting the robot for a single room was tested (vacuuming) |
+| Original firmware backup | `backup_4MB.bin` (4 MB, SHA256 `9EE1BE1C…3568A0`) |
+| Wi-Fi | Connected (2.4 GHz, WPA3) |
+| Home Assistant | ESPHome integration set up, actions allowed |
+| Robot integration | `switchbot_vacuum` from the fork [`jannefleischer/switchbot-vacuum`](https://github.com/jannefleischer/switchbot-vacuum), branch `prod` |
+| Not verified yet | Washing machine remaining time during a cycle; the mop buttons and whole-home start; firmware updates over Wi-Fi |
+| Open | Colours may look swapped on the display (red/blue); still to be checked on the device |
 
-## Inhalt
+## Contents
 
-| Pfad | Zweck | In Git? |
+| Path | Purpose | In Git? |
 |---|---|---|
-| `wandpanel.yaml` | Hauptdatei: WLAN, API, Fonts, HA-Entitäten, Seiten | ja |
-| `hardware/esp32-3248s035.yaml` | Display, Touch, Backlight | ja |
-| `ui/room_sensors.yaml` | Heizung: Ist, Soll und gepufferte Sollwert-Logik eines Raums | ja |
-| `ui/room_climate.yaml` | Heizung: Temperatur und Feuchte vom Hygrometer | ja |
-| `ui/room_row.yaml` | eine Zeile der Heizungsseite | ja |
-| `ui/vacuum_room_sensors.yaml` | Putzen: wann ein Raum zuletzt gesaugt und gewischt wurde | ja |
-| `ui/vacuum_room_row.yaml` | eine Zeile der Putzen-Seite, mit Start-Knöpfen | ja |
-| `ui/format_time.h` | formatiert Zeiten als „heute 11:23“, „gestern 11:23“ oder „08.11. 11:23“ | ja |
-| `diagnose_ha_slow.sh` | rein lesende Diagnose des Raspi bei langsamem HA | ja |
-| `secrets.example.yaml` | Vorlage für `secrets.yaml` | ja |
-| `secrets.yaml` | WLAN, API-Key, OTA-Passwort | **nein** |
-| `.env` | Adresse von Home Assistant | **nein** |
-| `secrets/*.secret` | Tokens und Passwörter für HA, WLAN, SwitchBot und GitHub. Nur für Abfragen und zum Erzeugen von `secrets.yaml`, nicht Teil der Firmware | **nein** |
-| `logs/` | Build-, Flash- und Diagnose-Logs | nein |
-| `.esphome/`, `.venv/` | Build-Dateien und Python-Umgebung | nein |
-| `backup_*.bin` | Sicherung der Originalfirmware | nein |
+| `wandpanel.yaml` | Main file: Wi-Fi, API, fonts, Home Assistant entities, pages | yes |
+| `hardware/esp32-3248s035.yaml` | Display, touch, backlight | yes |
+| `ui/room_sensors.yaml` | Heating: current and target temperature, buffered setpoint logic for one room | yes |
+| `ui/room_climate.yaml` | Heating: temperature and humidity from the hygrometer | yes |
+| `ui/room_row.yaml` | One row of the heating page | yes |
+| `ui/vacuum_room_sensors.yaml` | Cleaning: when a room was last vacuumed and mopped | yes |
+| `ui/vacuum_room_row.yaml` | One row of the cleaning page, with start buttons | yes |
+| `ui/format_time.h` | Formats timestamps as `heute`, `gestern` or `vor 3 Tagen` | yes |
+| `secrets.example.yaml` | Template for `secrets.yaml` | yes |
+| `secrets.yaml` | Wi-Fi, API key, OTA password | **no** |
+| `.env` | Home Assistant address | **no** |
+| `secrets/*.secret` | Tokens and passwords for Home Assistant, Wi-Fi, SwitchBot and GitHub. Only used for queries and to create `secrets.yaml`, not part of the firmware | **no** |
+| `logs/` | Build, flash and diagnostic logs | no |
+| `.esphome/`, `.venv/` | Build files and Python environment | no |
+| `backup_*.bin` | Backup of the original firmware | no |
 
-Der Ordner `Elektronik` ist derzeit kein Git-Repo. Die `.gitignore` greift erst, wenn hier eines angelegt wird.
+## Setup
 
-## Einrichtung
-
-Einmalig in PowerShell in diesem Ordner:
+Once, in PowerShell in this folder:
 
 ```powershell
 python -m venv .venv
@@ -50,13 +47,13 @@ python -m venv .venv
 Copy-Item secrets.example.yaml secrets.yaml
 ```
 
-Dann `secrets.yaml` ausfüllen. Der ESP32 kann nur **2,4-GHz-WLAN**. Den API-Key erzeugt der Befehl, der als Kommentar in der Vorlage steht.
+Then fill in `secrets.yaml`. The ESP32 only supports **2.4 GHz Wi-Fi**. The command that generates the API key is a comment in the template.
 
-Der erste Build lädt ESP-IDF und den Compiler nach `%LOCALAPPDATA%\esphome\Cache`, das dauert einige Minuten. Spätere Builds nutzen diesen Cache.
+The first build downloads ESP-IDF and the compiler to `%LOCALAPPDATA%\esphome\Cache`, which takes a few minutes. Later builds reuse this cache.
 
-## Bauen
+## Building
 
-**Immer in PowerShell bauen.** ESP-IDF bricht in Git Bash mit `MSys/Mingw is not supported` ab.
+**Always build in PowerShell.** ESP-IDF aborts in Git Bash with `MSys/Mingw is not supported`.
 
 ```powershell
 $log = "logs\compile-$(Get-Date -Format yyyyMMdd-HHmmss).log"
@@ -66,14 +63,14 @@ cmd /c ".\.venv\Scripts\esphome.exe compile wandpanel.yaml 2>&1" |
   ForEach-Object { $_; Add-Content -Path $log -Value $_ -Encoding utf8 }
 ```
 
-Das Log wächst dabei Zeile für Zeile in `logs\` und lässt sich im Editor live mitlesen. Nur prüfen ohne Bauen: `.\.venv\Scripts\esphome.exe config wandpanel.yaml`.
+The log grows line by line in `logs\`, so you can follow it live in an editor. To validate without building: `.\.venv\Scripts\esphome.exe config wandpanel.yaml`.
 
-### Wenn der Download mit 504 scheitert
+### If the download fails with 504
 
-Am 2026-11-08 lieferte GitHub für Release-Dateien dauerhaft `504 Gateway Time-out`.
+On 2026-11-08, GitHub returned `504 Gateway Time-out` for release files for a long stretch.
 
-- `IDF_GITHUB_ASSETS` (siehe oben) leitet die Build-Werkzeuge auf Espressifs Spiegel um.
-- Für ESP-IDF selbst muss zusätzlich unter `esp32:` in `hardware/esp32-3248s035.yaml` eine Quelle stehen. Das ist bewusst nicht dauerhaft eingetragen und nur nötig, solange GitHub streikt:
+- `IDF_GITHUB_ASSETS` (see above) redirects the build tools to Espressif's mirror.
+- ESP-IDF itself also needs a source under `esp32:` in `hardware/esp32-3248s035.yaml`. This is deliberately not committed and only needed while GitHub is failing:
 
 ```yaml
   framework:
@@ -82,67 +79,67 @@ Am 2026-11-08 lieferte GitHub für Release-Dateien dauerhaft `504 Gateway Time-o
     source: https://dl.espressif.com/github_assets/espressif/esp-idf/releases/download/v5.5.6/esp-idf-v5.5.6.zip
 ```
 
-## Flashen
+## Flashing
 
-Das Board hängt an **COM3**. Ein offener serieller Monitor blockiert den Port.
+The board is on **COM3**. An open serial monitor blocks the port.
 
-Vor dem ersten Flash die Originalfirmware sichern:
+Back up the original firmware before the first flash:
 
 ```powershell
-.\.venv\Scripts\python -m esptool --port COM3 --baud 460800 read-flash 0 0x400000 backup_4MB.bin
+.\.venv\Scripts\python -m esptool --port COM3 --baud 230400 read-flash 0 0x400000 backup_4MB.bin
 ```
 
-**Baudrate für den CH340:** 230400 lief zuverlässig. 460800 sollte laut Recherche auch gehen, ist hier aber ungetestet. 921600 brach beim Auslesen mit `Corrupt data` ab.
+**Baud rate for the CH340:** 230400 worked reliably. 460800 should work according to research but is untested here. 921600 failed while reading with `Corrupt data`.
 
-Dann per USB aufspielen und das Log ansehen:
+Then upload over USB and view the log:
 
 ```powershell
 .\.venv\Scripts\esphome.exe upload wandpanel.yaml --device COM3
 .\.venv\Scripts\esphome.exe logs wandpanel.yaml --device COM3
 ```
 
-Sobald das Panel im WLAN ist, entfällt USB: `--device wandpanel.local` oder dessen IP-Adresse.
+Once the panel is on Wi-Fi, USB is no longer needed: use `--device wandpanel.local` or its IP address.
 
-Zurück zur Sicherung:
+To restore the backup:
 
 ```powershell
 .\.venv\Scripts\python -m esptool --port COM3 write-flash 0 backup_4MB.bin
 ```
 
-## Home Assistant anbinden
+## Connecting Home Assistant
 
-1. Nach dem ersten Start erscheint das Panel unter Einstellungen → Geräte & Dienste. Sonst die ESPHome-Integration von Hand mit der IP-Adresse hinzufügen und den `api_key` eingeben.
-2. Beim Gerät unter „Konfigurieren“ die Option **„Allow the device to perform Home Assistant actions“** aktivieren. Ohne sie zeigt das Panel Werte an, aber Schalter und Solltemperatur wirken nicht.
+1. After the first start, the panel appears under Settings → Devices & services. Otherwise add the ESPHome integration manually with the IP address and enter the `api_key`.
+2. On the device, under "Configure", enable **"Allow the device to perform Home Assistant actions"**. Without it the panel shows values, but switches and setpoints have no effect.
 
-Dieses Home Assistant läuft ohne Supervisor, es gibt also kein ESPHome-Add-on. Gebaut wird auf dem PC.
+This Home Assistant runs without Supervisor, so there is no ESPHome add-on. Builds run on the PC.
 
-## Oberfläche
+## User interface
 
-Sprache auf dem Display: Deutsch. Nach 30 Sekunden ohne Berührung geht die Beleuchtung aus; die erste Berührung weckt nur auf und löst keinen Knopf aus.
+After 30 seconds without touch the backlight turns off. The first touch only wakes the panel and does not trigger a button.
 
-**Übersicht:** Außentemperatur und Wetter, Stromverbrauch mit Balkonkraftwerk und Prognose, Restzeit der Waschmaschine, Schalter für Flurlampe und Heißwasser Küche mit An/Aus-Anzeige.
+**Overview (Übersicht):** Outdoor temperature and weather, power use with balcony solar and forecast, washing machine remaining time, on/off switches for the hallway lamp and kitchen hot water.
 
-**Heizung:** Für Arbeitszimmer, Schlafzimmer, Küche, Laurie, Johanna und Erkerzimmer jeweils Ist am Thermostat, Raumtemperatur, relative Feuchte und Soll. Plus und Minus ändern das Soll in 0,5-°C-Schritten. Die Werte werden gepuffert: Erst 1 Sekunde nach dem letzten Druck geht der Wert an Home Assistant. Nicht erreichbare Thermostate zeigen `--`, die Tasten bleiben dann ohne Wirkung.
+**Heating (Heizung):** For each room, thermostat temperature, room temperature, relative humidity and target temperature. Plus and minus change the target in 0.5 °C steps. Presses are buffered: the value is sent to Home Assistant 1 second after the last press. Unreachable thermostats show `--` and their buttons have no effect.
 
-**Putzen:** Status und Akku, die letzte Fahrt, dazu je Raum, wann zuletzt gesaugt und gewischt wurde.
+**Cleaning (Putzen):** Status and battery, the last run, and for each room when it was last vacuumed and mopped.
 
-- Knöpfe oben rechts starten das ganze Haus, die Knöpfe am Zeilenende einen einzelnen Raum.
-- Gestartet wird nur, wenn der Roboter in der Station oder bereit ist.
-- Der Raumstart nutzt Saugkraft Standard. Der Ganzhaus-Start setzt den Modus in der Integration dauerhaft um.
-- Status und Akku kommen über Bluetooth; beim Ausfall springt für den Status die Cloud ein. Fehlen Verlaufsdaten, steht dort „Verlauf gerade nicht verfügbar“ bzw. `--`. `--` bei „Gewischt“ heißt auch: noch nie gewischt.
+- The buttons at the top right start the whole home, the buttons at the end of a row start a single room.
+- A run only starts when the robot is docked or idle.
+- Single-room runs use standard suction. Whole-home runs permanently change the mode set in the integration.
+- Status and battery come from Bluetooth; the cloud is the fallback for status. Without history data the page shows `Verlauf gerade nicht verfügbar` or `--`. `--` under `Gewischt` can also mean a room has never been mopped.
 
-### Ändern
+### Making changes
 
-- **Raum ergänzen:** in `wandpanel.yaml` je eine `!include`-Zeile unter `packages:` (Sensoren) und in der Seite (Zeile) anlegen. `room` muss eindeutig sein. Heizung (6 Zeilen) und Putzen (8 Zeilen) sind voll belegt.
-- **Roboter-Räume:** Die Zuordnung Name zu `ROOM_…` steht in den `!include`-Zeilen. Benennst du Räume in der App um, bleiben die Entitäten gleich, und das Panel zeigt den neuen Namen, sobald die Integration ihn kennt (`force_refresh` oder spätestens nach einem Tag).
-- **Neue Texte:** Jedes Zeichen muss in `glyphs:` des jeweiligen Fonts stehen, sonst bleibt es leer. `font_big` enthält nur Ziffern und wenige Zeichen.
-- **Farben und Layout:** Das Layout arbeitet mit festen Koordinaten für 480×320.
+- **Adding a room:** in `wandpanel.yaml`, add one `!include` line under `packages:` (sensors) and one in the page (row). `room` must be unique. Heating (6 rows) and cleaning (8 rows) are full.
+- **Robot rooms:** The `ROOM_…` IDs are in the `!include` lines. If you rename a room in the app, the entities stay the same and the panel shows the new name once the integration knows it (`force_refresh`, or within a day).
+- **New text:** Every character must be listed in the `glyphs:` of its font, otherwise it is not drawn. `font_big` only has digits and a few characters.
+- **Layout:** The layout uses fixed coordinates for 480×320.
 
-## Bekannte Grenzen
+## Known limitations
 
-- **RAM ist der Engpass.** Das Board hat kein PSRAM, der Bildpuffer belegt bei 25 % schon 76,8 KB. Meldet LVGL einen Allokationsfehler, `buffer_size` auf 12 % senken.
-- **Bilder sparsam einsetzen.** Sie kommen in den Flash, die SD-Karte wird nicht genutzt (Begründung in der `CLAUDE.md`).
-- **Touch:** Die Ausrichtung passt. `transform` steht unter `touchscreen:` in der Hardware-Datei; die Bildausrichtung liegt getrennt davon beim Display.
-- **Touch ohne Interrupt:** läuft bewusst per Polling, GPIO 21 und 25 sind noch nicht getestet.
-- **Offene ESPHome-Warnungen:** `ili9xxx` ist veraltet (Ziel `mipi_spi`), und für OTA wird `encryption` statt `password` empfohlen. Beides ist noch offen.
-- Die Warnungen zu den Strapping-Pins GPIO 2, 12 und 15 sind bei diesem Board normal, die Belegung gibt die Platine vor.
+- **RAM is the bottleneck.** The board has no PSRAM, and the display buffer alone takes 76.8 KB at 25 %. If LVGL reports an allocation error, reduce `buffer_size` to 12 %.
+- **Use images sparingly.** They are stored in flash; the SD card is not used (see `CLAUDE.md` for why).
+- **Touch alignment:** `transform` is under `touchscreen:` in the hardware file; the display orientation is configured separately.
+- **Touch without interrupt:** Polling is used on purpose. GPIO 21 and 25 are untested.
+- **Open ESPHome warnings:** `ili9xxx` is deprecated (target: `mipi_spi`), and `encryption` is recommended over `password` for OTA.
+- The strapping pin warnings for GPIO 2, 12 and 15 are expected on this board, as the PCB fixes these pins.

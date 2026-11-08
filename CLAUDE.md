@@ -1,82 +1,83 @@
-# Wandpanel für Home Assistant (ESPHome)
+# Home Assistant wall panel (ESPHome)
 
-Ziel: China-Touch-Display (ESP32-3248S035, kapazitive Variante) als Wandpanel für Home Assistant: Informationen anzeigen, einzelne Geräte steuern.
+Goal: a low-cost touch display (ESP32-3248S035, capacitive variant) as a wall panel for Home Assistant, showing information and controlling selected devices.
 
-Stand: 2026-11-08. Das Panel läuft produktiv. Build, Flashen und Bedienung stehen in `README.md`, die tatsächliche Konfiguration in `wandpanel.yaml`, `hardware/` und `ui/`. Der frühere Arduino-Sketch liegt in `..\esp32-display`.
+Status: 2026-11-08. The panel is in daily use. Building, flashing and usage are in `README.md`; the actual configuration is in `wandpanel.yaml`, `hardware/` and `ui/`. The earlier Arduino sketch is in `..\esp32-display`.
 
-## Warum ESPHome mit LVGL
+Text shown on the display stays German. Documentation and code identifiers in new work are English.
 
-- Die native API liefert Zustände aus HA und ruft HA-Actions auf, ohne eigenen MQTT- oder REST-Code.
-- OTA-Updates und Logs über WLAN sind eingebaut.
-- Die UI ist deklaratives YAML. Der vorhandene Arduino-Sketch ist nur eine Demo-UI ohne WLAN und HA.
+## Why ESPHome with LVGL
+
+- The native API delivers states from Home Assistant and calls its actions, with no custom MQTT or REST code.
+- OTA updates and logs over Wi-Fi are built in.
+- The UI is declarative YAML. The existing Arduino sketch is only a demo UI without Wi-Fi or Home Assistant.
 
 ## Hardware
 
-Ausgelesen am 2026-11-08 per `esptool` am angeschlossenen Board:
+Read with `esptool` from the connected board on 2026-11-08:
 
-| Eigenschaft | Wert |
+| Property | Value |
 |---|---|
-| Chip | ESP32-D0WD-V3, Revision 3.1, Dual Core, 240 MHz, 40-MHz-Quarz |
-| Flash | 4 MB (Manufacturer 0x5e, Device 0x4016), bootet im DIO-Modus |
-| PSRAM | keiner (Boot-Log: `PSRAM ID read error`; harmlos, kommt vom Core) |
-| USB-Seriell | CH340 auf **COM3** |
+| Chip | ESP32-D0WD-V3, revision 3.1, dual core, 240 MHz, 40 MHz crystal |
+| Flash | 4 MB (manufacturer 0x5e, device 0x4016), boots in DIO mode |
+| PSRAM | None (boot log: `PSRAM ID read error`; harmless, comes from the core) |
+| USB serial | CH340 on **COM3** |
 
-Die maßgebliche Pinquelle ist der Schaltplan V1.1:
+The authoritative pin source is schematic V1.1:
 `\\qnapjjf\Familie\Janne\Elektronik\3.5inch_ESP32-3248S035\5-Schematic\`
 
-| Funktion | GPIO | Hinweis |
+| Function | GPIO | Note |
 |---|---|---|
-| TFT SCLK / MOSI / MISO | 14 / 13 / 12 | ST7796, 320×480. GPIO12 ist Strapping-Pin |
-| TFT CS / DC | 15 / 2 | beides Strapping-Pins |
-| TFT RST | – | am EN-Netz des ESP32 |
-| Backlight | 27 | PWM über MOSFET, HIGH = an |
-| Touch SDA / SCL | 33 / 32 | GT911, Adresse 0x5D |
+| TFT SCLK / MOSI / MISO | 14 / 13 / 12 | ST7796, 320×480. GPIO12 is a strapping pin |
+| TFT CS / DC | 15 / 2 | Both strapping pins |
+| TFT RST | – | On the ESP32 EN net |
+| Backlight | 27 | PWM via MOSFET, HIGH = on |
+| Touch SDA / SCL | 33 / 32 | GT911, address 0x5D |
 | Touch RST | 25 | |
-| Touch INT | **21** | über R25 (0 Ω), siehe unten |
-| RGB-LED | 4 / 16 / 17 | active LOW, laut Notiz Rot/Grün/Blau |
-| Lichtsensor (LDR) | 34 | Spannungsteiler, nur Eingang |
-| Lautsprecher | 26 | DAC auf Verstärker SC8002B |
+| Touch INT | **21** | Via R25 (0 Ω), see below |
+| RGB LED | 4 / 16 / 17 | Active LOW, red/green/blue according to earlier notes |
+| Light sensor (LDR) | 34 | Voltage divider, input only |
+| Speaker | 26 | DAC into SC8002B amplifier |
 | SD CS / MOSI / CLK / MISO | 5 / 23 / 18 / 19 | |
-| BOOT-Taste | 0 | LOW = gedrückt |
-| Stecker P3 frei | 21 / 22 / 35 | 35 nur Eingang, 21 ist auch Touch-INT |
+| BOOT button | 0 | LOW = pressed |
+| Free on connector P3 | 21 / 22 / 35 | 35 is input only, 21 is also touch INT |
 
-### Bekannte Stolperstelle GPIO 21
+### Known pitfall: GPIO 21
 
-Community-Quellen berichten, dass GT911-INT auf manchen Boards fehlerhaft geroutet ist (auf GND statt über R25). Im Forum funktionierte Touch erst ohne `interrupt_pin` und `reset_pin`. Deshalb zuerst mit Polling starten (`update_interval: 50ms`) und `reset_pin: GPIO25` separat testen. Ob dieses Exemplar betroffen ist, ist ungetestet.
+Community sources report that GT911 INT is misrouted on some boards (to GND instead of through R25). In a forum thread, touch only worked without `interrupt_pin` and `reset_pin`. The panel therefore uses polling (`update_interval: 50ms`). Whether this board is affected, and whether `reset_pin: GPIO25` works, is untested.
 
-## Hardware ansprechen
+## Talking to the hardware
 
-Immer mit dem PlatformIO-esptool, das Board startet dabei neu:
+Use the PlatformIO esptool; the board restarts when it is used:
 
 ```bash
 python "$USERPROFILE/.platformio/packages/tool-esptoolpy/esptool.py" --port COM3 flash_id
 ```
 
-Serielles Log mit 115200 Baud: `pio device monitor -p COM3 -b 115200`.
-Baudrate für `esptool`: 230400 lief zuverlässig, 460800 ist laut Recherche möglich, aber ungetestet. 921600 brach beim Auslesen mit `Corrupt data` ab.
-Der Port kann nur von einem Prozess gleichzeitig belegt werden. Ein offener Monitor blockiert also das Flashen.
+Serial log at 115200 baud: `pio device monitor -p COM3 -b 115200`.
+`esptool` baud rate: 230400 worked reliably, 460800 should work according to research but is untested. 921600 failed while reading with `Corrupt data`.
+Only one process can hold the port, so an open monitor blocks flashing.
 
+## ESPHome findings
 
-## ESPHome-Erkenntnisse
+### Memory is the main limit
 
-### Speicher ist die Hauptgrenze
+- Without PSRAM, the ESPHome docs recommend `buffer_size: 25%`. At 320×480 in RGB565 that is **76,800 bytes**, which must be free in one contiguous block.
+- If the allocation fails, LVGL goes to "Failed". An explicitly set size has no fallback; reduce it to 12 % in that case.
+- Use fonts and images sparingly: only the glyphs you need, and no large bitmaps if possible.
+- Drawing directly without LVGL fails because there is no full-frame buffer. Hence `update_interval: never` and `auto_clear_enabled: false`.
 
-- Ohne PSRAM empfiehlt die ESPHome-Doku `buffer_size: 25%`. Das sind bei 320×480 in RGB565 **76.800 Bytes**, die zusammenhängend frei sein müssen.
-- Schlägt die Allokation fehl, geht LVGL auf „Failed“. Bei explizit gesetzter Größe gibt es keinen Fallback; dann auf 12 % reduzieren.
-- Fonts und Bilder sparsam einsetzen: nur benötigte Glyphen, möglichst keine großen Bitmaps. Das Limit von 4 MB Flash wird mit OTA-Partitionen knapper.
-- Direktes Zeichnen ohne LVGL scheitert am fehlenden Vollbild-Puffer. Deshalb `update_interval: never` und `auto_clear_enabled: false`.
+### SD card: not used for now
 
-### SD-Karte: vorerst nicht nutzen
+A search on 2026-11-08 found no official way to load LVGL images from SD in ESPHome; images in flash and over HTTP(S) are documented. SD would need a custom component and more RAM. RAM is the bottleneck, not flash. Icons therefore go in flash: 48×48 px in RGB565 is 4.6 KB, a full screen is 307 KB.
 
-Eine Suche (2026-11-08) ergab keinen offiziellen Weg, LVGL-Bilder in ESPHome von SD zu laden; dokumentiert sind Bilder im Flash und per HTTP(S). SD bräuchte eine eigene Komponente und zusätzlichen RAM. Der Engpass ist RAM, nicht Flash. Icons kommen deshalb in den Flash: 48×48 px in RGB565 sind 4,6 KB, ein Vollbild dagegen 307 KB.
+### Status
 
-### Stand
+Runs on the device with ESPHome 2026.10.2. Open warnings: `ili9xxx` is deprecated (target: `mipi_spi`), and ESPHome recommends `encryption` over `password` for OTA.
 
-Läuft auf dem Gerät mit ESPHome 2026.10.2. Offene Warnungen: `ili9xxx` ist veraltet (Ziel: `mipi_spi`), und für OTA empfiehlt ESPHome `encryption` statt `password`.
+### Home Assistant patterns
 
-### Muster für Home Assistant
-
-Zustand holen und Aktion auslösen, hier für eine Lampe:
+Read a state and trigger an action, here for a lamp:
 
 ```yaml
 binary_sensor:
@@ -91,7 +92,7 @@ binary_sensor:
           state:
             checked: !lambda return x;
 
-# Im LVGL-Widget:
+# In the LVGL widget:
 - button:
     id: light_btn
     checkable: true
@@ -102,27 +103,27 @@ binary_sensor:
             entity_id: light.remote_light
 ```
 
-- Für Klima: `homeassistant`-Sensor in eine Spinbox schreiben, deren `on_value` `climate.set_temperature` aufruft.
-- **Pflicht in HA:** Unter Integration ESPHome → Gerät → Konfigurieren die Option „Allow the device to perform Home Assistant actions“ aktivieren. Sonst passieren die Aktionen nicht.
-- API verschlüsseln: `api: encryption: key: !secret api_key`.
-- Direkt nach dem Verbinden gesendete Actions können verloren gehen; vorher kurz `delay` einbauen.
+- **Required in Home Assistant:** under the ESPHome integration → device → Configure, enable "Allow the device to perform Home Assistant actions". Otherwise actions are rejected.
+- Encrypt the API: `api: encryption: key: !secret api_key`.
+- Actions sent right after connecting can be lost; add a short `delay` first.
 
-## Konventionen
+## Conventions
 
-- WLAN-Daten und API-Key nur in `secrets.yaml` (dort per `.gitignore` ausgeschlossen).
-- Flashen oder Löschen des Boards vorher mit Janne abstimmen.
-- Erkenntnisse aus Tests am Gerät hier nachtragen; Schaltplan und `esptool` gehen vor älteren Notizen.
+- Wi-Fi credentials and the API key go only in `secrets.yaml` (excluded by `.gitignore`).
+- Agree on flashing or erasing the board with Janne first.
+- Add findings from tests on the device here; the schematic and `esptool` take precedence over older notes.
+- Write long-running build logs unbuffered to `logs/`, so they can be followed live.
 
-## Noch zu klären
+## Open points
 
-- HA: 2026.11.0, Adresse in `.env`, Token in `secrets\ha_token.secret`. Kein Supervisor, also keine Add-ons: ESPHome läuft auf diesem PC.
-- Montage: Flur am Stromkasten, quer. Stromversorgung und Dauerbetrieb sind noch offen. Der LDR an GPIO 34 ist ungenutzt.
-- Display-Farben: Rot und Blau wirken möglicherweise vertauscht (`color_order`), Prüfung am Gerät steht aus.
-- Der Roboter hängt über Fork `jannefleischer/switchbot-vacuum` (Cloud, Räume, Verlauf) und die Bluetooth-Integration `switchbot` (Live-Status, Akku) an HA.
+- Home Assistant: 2026.11.0, address in `.env`, token in `secrets\ha_token.secret`. No Supervisor and therefore no add-ons: ESPHome runs on the PC.
+- Mounting: landscape. Power supply and continuous operation are still open. The LDR on GPIO 34 is unused.
+- Display colours: red and blue may be swapped (`color_order`); still to be checked on the device.
+- The robot is connected through the fork `jannefleischer/switchbot-vacuum` (cloud, rooms, history) and the Bluetooth integration `switchbot` (live status, battery).
 
-## Quellen
+## Sources
 
 - [ESPHome LVGL](https://esphome.io/components/lvgl/), [LVGL Cookbook](https://esphome.io/cookbook/lvgl/)
 - [ESPHome GT911](https://esphome.io/components/touchscreen/gt911/), [mipi_spi](https://esphome.io/components/display/mipi_spi/), [Native API](https://esphome.io/components/api/)
-- [HA-Forum: ESP32-3248S035](https://community.home-assistant.io/t/help-making-esp32-3248s035-work/748332)
-- [Community-Pinbelegung 3248S035C](https://github.com/rzeldent/platformio-espressif32-sunton/blob/main/esp32-3248S035C.json), [Hardware-Notizen ESP3D](https://esp3d.io/ESP3D-TFT/Version_1.X/hardware/esp32/sunton-35-3248)
+- [Home Assistant forum: ESP32-3248S035](https://community.home-assistant.io/t/help-making-esp32-3248s035-work/748332)
+- [Community pinout 3248S035C](https://github.com/rzeldent/platformio-espressif32-sunton/blob/main/esp32-3248S035C.json), [ESP3D hardware notes](https://esp3d.io/ESP3D-TFT/Version_1.X/hardware/esp32/sunton-35-3248)
